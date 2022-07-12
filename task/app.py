@@ -1,9 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from .api import router
 
 
 app = FastAPI()
-
-
-@app.get('/')
-def root():
-    return {'Hello': 'world'}
+app.include_router(router)

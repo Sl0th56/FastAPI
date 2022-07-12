@@ -68,3 +68,13 @@ def change_state(id: int, state: State, database=Depends(connection_db)):
     database.commit()
 
     return {"id": id, exists_question.text: state.value}
+
+@router.get('/admin/questionById')
+def get_question(id: int, database=Depends(connection_db)):
+    question = database.query(Questions).filter(Questions.id == id).one_or_none()
+    if not question:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
+
+    ans = database.query(Ans).filter(Ans.question_id == id).all()
+
+    return {'id': question.id, 'text': question.text, 'state': question.state, 'date': question.date, 'ans': ans}

@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from ..db import connection_db
 from ..models.admin import QuestionCreateDto
-from ..table import Questions, Ans
+from ..table import Questions, Ans, State
 from starlette import status
 from datetime import date
+from sqlalchemy import update
 
 router = APIRouter()
 
@@ -51,3 +52,19 @@ def create_question(question: QuestionCreateDto, database=Depends(connection_db)
         'state': new_question.state,
         'date': new_question.date
     }
+
+@router.put('/admin/setState')
+def change_state(id: int, state: State, database=Depends(connection_db)):
+    exists_question = database.query(Questions.text).filter(Questions.id == id).one_or_none()
+    if not exists_question:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
+
+    update_stmt = (
+        update(Questions).where(Questions.id == id).
+        values(state=state.value)
+    )
+
+    database.execute(update_stmt)
+    database.commit()
+
+    return {"id": id, exists_question.text: state.value}

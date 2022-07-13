@@ -4,7 +4,7 @@ from ..models.admin import QuestionCreateDto
 from ..table import Questions, Ans, State
 from starlette import status
 from datetime import date
-from sqlalchemy import update
+from sqlalchemy import update, delete
 
 router = APIRouter()
 
@@ -47,9 +47,10 @@ def create_question(question: QuestionCreateDto, database=Depends(connection_db)
         database.commit()
 
     return {
-        'question_id': new_question.id,
+        'id': new_question.id,
         'text': new_question.text,
         'state': new_question.state,
+        'ans': question.ansList,
         'date': new_question.date
     }
 
@@ -59,12 +60,12 @@ def change_state(id: int, state: State, database=Depends(connection_db)):
     if not exists_question:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
 
-    update_stmt = (
+    update_question = (
         update(Questions).where(Questions.id == id).
         values(state=state.value)
     )
 
-    database.execute(update_stmt)
+    database.execute(update_question)
     database.commit()
 
     return {"id": id, exists_question.text: state.value}
@@ -77,4 +78,56 @@ def get_question(id: int, database=Depends(connection_db)):
 
     ans = database.query(Ans).filter(Ans.question_id == id).all()
 
-    return {'id': question.id, 'text': question.text, 'state': question.state, 'date': question.date, 'ans': ans}
+    return {'id': question.id, 'data': question.text, 'state': question.state, 'date': question.date, 'ans': ans}
+
+@router.put('/admin')
+def change_question(id: int, question: QuestionCreateDto, database=Depends(connection_db)):
+    exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
+    if not exists_question:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
+    if exists_question.text == question.text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Questions already exists')
+
+    update_question = (
+        update(Questions).where(Questions.id == id).
+        values(
+            text=question.text,
+            state=question.state.value,
+            date=date.today()
+        )
+    )
+
+    database.execute(update_question)
+    database.commit()
+
+    delete_ans = (
+        delete(Ans).where(Ans.question_id == id)
+    )
+
+    database.execute(delete_ans)
+    database.commit()
+
+    arr_ans = database.query(Ans.id).all()
+    max_id_ans = 0
+    if arr_ans:
+        max_id_ans = arr_ans[-1][-1] + 1
+
+    for index, value in enumerate(question.ansList):
+        new_ans = Ans(
+            id=max_id_ans,
+            text=value.text,
+            position=index,
+            question_id=id
+        )
+        max_id_ans += 1
+
+        database.add(new_ans)
+        database.commit()
+
+    return {
+        'id': id,
+        'text': question.text,
+        'state': question.state,
+        'ans': question.ansList,
+        'date': date.today()
+    }

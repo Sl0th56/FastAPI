@@ -131,3 +131,25 @@ def change_question(id: int, question: QuestionCreateDto, database=Depends(conne
         'ans': question.ansList,
         'date': date.today()
     }
+
+@router.delete('/admin')
+def delete_question(id: int, database=Depends(connection_db)):
+    exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
+    if not exists_question:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
+
+    delete_ans = (
+        delete(Ans).where(Ans.question_id == id)
+    )
+
+    database.execute(delete_ans)
+    database.commit()
+
+    delete_questions = (
+        delete(Questions).where(Questions.id == id)
+    )
+
+    database.execute(delete_questions)
+    database.commit()
+
+    return {'delete': 'success'}

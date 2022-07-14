@@ -4,9 +4,10 @@ from ..models.admin import QuestionDto
 from ..table import Questions, Ans, State, UserAns
 from starlette import status
 from datetime import date
-from sqlalchemy import update, delete, func
+from sqlalchemy import update, delete, func, and_, select
 
 router = APIRouter()
+
 
 @router.post('/admin')
 def create_question(question: QuestionDto, database=Depends(connection_db)):
@@ -46,7 +47,7 @@ def create_question(question: QuestionDto, database=Depends(connection_db)):
         new_ans = Ans(
             id=max_id_ans,
             text=value.text,
-            position=index,
+            position=index + 1,
             question_id=max_id_question
         )
         max_id_ans += 1
@@ -62,6 +63,7 @@ def create_question(question: QuestionDto, database=Depends(connection_db)):
         'date': new_question.date
     }
 
+
 @router.put('/admin/setState')
 def change_state(id: int, state: State, database=Depends(connection_db)):
     exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
@@ -70,13 +72,14 @@ def change_state(id: int, state: State, database=Depends(connection_db)):
 
     update_question = (
         update(Questions).where(Questions.id == id).
-        values(state=state.value)
+            values(state=state.value)
     )
 
     database.execute(update_question)
     database.commit()
 
     return {"id": id, exists_question.text: state.value}
+
 
 @router.get('/admin/questionById')
 def get_question(id: int, database=Depends(connection_db)):
@@ -94,6 +97,7 @@ def get_question(id: int, database=Depends(connection_db)):
         'ans': ans
     }
 
+
 @router.put('/admin')
 def change_question(id: int, question: QuestionDto, database=Depends(connection_db)):
     exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
@@ -104,7 +108,7 @@ def change_question(id: int, question: QuestionDto, database=Depends(connection_
 
     update_question = (
         update(Questions).where(Questions.id == id).
-        values(
+            values(
             text=question.text,
             state=question.state.value,
             date=date.today()
@@ -150,6 +154,7 @@ def change_question(id: int, question: QuestionDto, database=Depends(connection_
         'date': date.today()
     }
 
+
 @router.delete('/admin')
 def delete_question(id: int, database=Depends(connection_db)):
     exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
@@ -172,18 +177,29 @@ def delete_question(id: int, database=Depends(connection_db)):
 
     return {'delete': 'success'}
 
+
 @router.get('/admin/statistic')
 def get_statistic(id: int, database=Depends(connection_db)):
     exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
     if not exists_question:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
 
-    # count = (
-    #     database.query(func.count(UserAns.id).label("count")).filter(UserAns.question_id == id)
-    # )
-    #
-    # # suc = maximum.one()
-    #
-    # print(count.one().count)
+    all_count_ans = (
+        database.query(func.count(UserAns.ans_position).label("count")).filter(UserAns.question_id == id)
+    )
 
-    return {'id': 'ans'}
+    query = select(Ans.text, func.count(UserAns.ans_position).label("count"))\
+        .where(UserAns.question_id == id)\
+        .where(Questions.id == UserAns.question_id)\
+        .where(Questions.id == Ans.question_id) \
+        .where(Ans.position == UserAns.ans_position)\
+        .group_by(Ans.text)
+
+    query_question = database.execute(query).all()
+    print(query_question)
+
+    return {
+        'text': exists_question.text,
+        'count': all_count_ans.one().count,
+        'ansList': query_question
+    }

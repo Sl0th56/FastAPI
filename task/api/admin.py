@@ -4,7 +4,7 @@ from ..models.admin import QuestionDto
 from ..table import Questions, Ans, State, UserAns
 from starlette import status
 from datetime import date
-from sqlalchemy import update, delete, func, and_, select
+from sqlalchemy import update, delete, func, select
 
 router = APIRouter()
 
@@ -188,11 +188,11 @@ def get_statistic(id: int, database=Depends(connection_db)):
         database.query(func.count(UserAns.ans_position).label("count")).filter(UserAns.question_id == id)
     )
 
-    query = select(Ans.text, func.count(UserAns.ans_position).label("count"))\
-        .where(UserAns.question_id == id)\
-        .where(Questions.id == UserAns.question_id)\
+    query = select(Ans.text, func.count(UserAns.ans_position).label("count")) \
+        .where(UserAns.question_id == id) \
+        .where(Questions.id == UserAns.question_id) \
         .where(Questions.id == Ans.question_id) \
-        .where(Ans.position == UserAns.ans_position)\
+        .where(Ans.position == UserAns.ans_position) \
         .group_by(Ans.text)
 
     query_question = database.execute(query).all()

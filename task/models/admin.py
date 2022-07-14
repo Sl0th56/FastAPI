@@ -10,7 +10,7 @@ class QuestionState(str, Enum):
 class Ans(BaseModel):
     text: str
 
-class QuestionCreateDto(BaseModel):
+class QuestionDto(BaseModel):
     text: str
     state: QuestionState
     ansList: List[Ans]

@@ -1,23 +1,27 @@
 from fastapi import APIRouter, Depends, HTTPException
 from ..db import connection_db
-from ..models.admin import QuestionCreateDto
-from ..table import Questions, Ans, State
+from ..models.admin import QuestionDto
+from ..table import Questions, Ans, State, UserAns
 from starlette import status
 from datetime import date
-from sqlalchemy import update, delete
+from sqlalchemy import update, delete, func
 
 router = APIRouter()
 
 @router.post('/admin')
-def create_question(question: QuestionCreateDto, database=Depends(connection_db)):
+def create_question(question: QuestionDto, database=Depends(connection_db)):
     exists_question = database.query(Questions.id).filter(Questions.text == question.text).one_or_none()
     if exists_question:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Questions already exists')
 
-    arr_question = database.query(Questions.id).all()
-    max_id_question = 0
-    if arr_question:
-        max_id_question = arr_question[-1][-1] + 1
+    query_max_id_question = (
+        database.query(func.max(Questions.id).label("max_id"))
+    )
+
+    if query_max_id_question.one().max_id is not None:
+        max_id_question = query_max_id_question.one().max_id + 1
+    else:
+        max_id_question = 1
 
     new_question = Questions(
         id=max_id_question,
@@ -29,10 +33,14 @@ def create_question(question: QuestionCreateDto, database=Depends(connection_db)
     database.add(new_question)
     database.commit()
 
-    arr_ans = database.query(Ans.id).all()
-    max_id_ans = 0
-    if arr_ans:
-        max_id_ans = arr_ans[-1][-1] + 1
+    query_max_id_ans = (
+        database.query(func.max(Ans.id).label("max_id"))
+    )
+
+    if query_max_id_ans.one().max_id is not None:
+        max_id_ans = query_max_id_ans.one().max_id + 1
+    else:
+        max_id_ans = 1
 
     for index, value in enumerate(question.ansList):
         new_ans = Ans(
@@ -56,7 +64,7 @@ def create_question(question: QuestionCreateDto, database=Depends(connection_db)
 
 @router.put('/admin/setState')
 def change_state(id: int, state: State, database=Depends(connection_db)):
-    exists_question = database.query(Questions.text).filter(Questions.id == id).one_or_none()
+    exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
     if not exists_question:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
 
@@ -72,16 +80,22 @@ def change_state(id: int, state: State, database=Depends(connection_db)):
 
 @router.get('/admin/questionById')
 def get_question(id: int, database=Depends(connection_db)):
-    question = database.query(Questions).filter(Questions.id == id).one_or_none()
-    if not question:
+    exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
+    if not exists_question:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
 
     ans = database.query(Ans).filter(Ans.question_id == id).all()
 
-    return {'id': question.id, 'data': question.text, 'state': question.state, 'date': question.date, 'ans': ans}
+    return {
+        'id': exists_question.id,
+        'data': exists_question.text,
+        'state': exists_question.state,
+        'date': exists_question.date,
+        'ans': ans
+    }
 
 @router.put('/admin')
-def change_question(id: int, question: QuestionCreateDto, database=Depends(connection_db)):
+def change_question(id: int, question: QuestionDto, database=Depends(connection_db)):
     exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
     if not exists_question:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
@@ -107,10 +121,14 @@ def change_question(id: int, question: QuestionCreateDto, database=Depends(conne
     database.execute(delete_ans)
     database.commit()
 
-    arr_ans = database.query(Ans.id).all()
-    max_id_ans = 0
-    if arr_ans:
-        max_id_ans = arr_ans[-1][-1] + 1
+    query_max_id_ans = (
+        database.query(func.max(Ans.id).label("max_id"))
+    )
+
+    if query_max_id_ans.one().max_id is not None:
+        max_id_ans = query_max_id_ans.one().max_id + 1
+    else:
+        max_id_ans = 1
 
     for index, value in enumerate(question.ansList):
         new_ans = Ans(
@@ -153,3 +171,19 @@ def delete_question(id: int, database=Depends(connection_db)):
     database.commit()
 
     return {'delete': 'success'}
+
+@router.get('/admin/statistic')
+def get_statistic(id: int, database=Depends(connection_db)):
+    exists_question = database.query(Questions).filter(Questions.id == id).one_or_none()
+    if not exists_question:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Question not found')
+
+    # count = (
+    #     database.query(func.count(UserAns.id).label("count")).filter(UserAns.question_id == id)
+    # )
+    #
+    # # suc = maximum.one()
+    #
+    # print(count.one().count)
+
+    return {'id': 'ans'}

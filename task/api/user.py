@@ -1,19 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from ..db import connection_db
-from ..models.admin import QuestionDto
-from ..table import Questions, Ans, State, UserAns
+from ..table import Questions, Ans, UserAns
 from starlette import status
-from datetime import date
-from sqlalchemy import update, delete, func, select, or_
+from sqlalchemy import func, select, or_, and_
 
 router = APIRouter()
 
 @router.post('/user')
 def create_user_ans(userID: int, questionId: int, ansPosition: int = None, database=Depends(connection_db)):
     exists_question = database.query(Ans).filter(Ans.question_id == questionId)\
-        .filter(or_(Ans.position == ansPosition, ansPosition is None)).one_or_none()
+        .filter(or_(Ans.position == ansPosition, ansPosition is None)).first()
     if not exists_question:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='question not found')
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='question or ans not found')
 
     query_max_id_user_ans = (
         database.query(func.max(UserAns.id).label("max_id"))
@@ -41,6 +39,24 @@ def create_user_ans(userID: int, questionId: int, ansPosition: int = None, datab
         'ans_position': ansPosition
     }
 
-    # q = select(UserAns.id).where(UserAns.ans_position == None)
-    # q = database.execute(q)
-    # print(q.first()[0])
+@router.get('/user')
+def get_current_unanswered_question(userID: int, database=Depends(connection_db)):
+    exists_question = database.query(UserAns).filter(UserAns.user_id == userID).first()
+    if not exists_question:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='user not found')
+
+    user_ans = database.query(UserAns)\
+        .filter(and_(UserAns.user_id == userID, UserAns.ans_position == None)).first()
+
+    if user_ans is None:
+        return {None}
+
+    query_question = select(Questions).where(Questions.id == user_ans.question_id)
+    query_question = database.execute(query_question).first()
+
+    return {
+        "id": query_question.Questions.id,
+        'text': query_question.Questions.text,
+        'state': query_question.Questions.state,
+        'date': query_question.Questions.date
+    }

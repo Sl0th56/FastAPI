@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from ..db import connection_db
-from ..models.admin import QuestionDto
+from ..models.admin import QuestionDto, QuestionState
 from ..table import Questions, Ans, State, UserAns
 from starlette import status
 from datetime import date
-from sqlalchemy import update, delete, func, select
+from sqlalchemy import update, delete, func, select, and_, desc
+from typing import Union
 
 router = APIRouter()
 
@@ -168,6 +169,13 @@ def delete_question(id: int, database=Depends(connection_db)):
     database.execute(delete_ans)
     database.commit()
 
+    delete_user_ans = (
+        delete(UserAns).where(UserAns.question_id == id)
+    )
+
+    database.execute(delete_user_ans)
+    database.commit()
+
     delete_questions = (
         delete(Questions).where(Questions.id == id)
     )
@@ -196,10 +204,41 @@ def get_statistic(id: int, database=Depends(connection_db)):
         .group_by(Ans.text)
 
     query_question = database.execute(query).all()
-    print(query_question)
+    database.commit()
 
     return {
         'text': exists_question.text,
         'count': all_count_ans.one().count,
         'ansList': query_question
+    }
+
+
+@router.get('/admin')
+def get_cropped_list_questions(
+        search: str,
+        state: QuestionState,
+        page: Union[int, None] = Query(default=0),
+        size: Union[int, None] = Query(default=20),
+        database=Depends(connection_db)
+):
+    query_cropped_questions = database.query(Questions.id, Questions.text)\
+        .where(and_(Questions.text.like(f'%{search}%'), Questions.state == state))\
+        .order_by(desc(Questions.date))
+    content = database.execute(query_cropped_questions).all()
+    database.commit()
+
+    query_count = database.query(func.count(Questions.id).label("count")) \
+        .where(and_(Questions.text.like(f'%{search}%'), Questions.state == state))
+    totalElements = database.execute(query_count).one()
+    database.commit()
+
+    if totalElements.count % size != 0:
+        totalPages = int(totalElements.count / size) + 1
+    else:
+        totalPages = int(totalElements.count / size)
+
+    return {
+        'content': content[page*size:page*size+size],
+        'totalElements': totalElements.count,
+        'totalPages': totalPages
     }

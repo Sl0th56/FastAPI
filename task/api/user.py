@@ -45,18 +45,31 @@ def get_current_unanswered_question(userID: int, database=Depends(connection_db)
     if not exists_question:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='user not found')
 
-    user_ans = database.query(UserAns)\
-        .filter(and_(UserAns.user_id == userID, UserAns.ans_position == None)).first()
+    query_questions = select(Questions)\
+        .where(and_(UserAns.user_id == userID, UserAns.ans_position == None))\
+        .where(Questions.id == UserAns.question_id) \
+        .where(Questions.id == Ans.question_id)
 
-    if user_ans is None:
+    questions = database.execute(query_questions).first()
+    database.commit()
+
+    if questions is None:
         return {None}
 
-    query_question = select(Questions).where(Questions.id == user_ans.question_id)
-    query_question = database.execute(query_question).first()
+    query_ans = select(Ans.position, Ans.text) \
+        .where(and_(UserAns.user_id == userID, UserAns.ans_position == None)) \
+        .where(and_(UserAns.user_id == userID, UserAns.ans_position == None)) \
+        .where(Questions.id == UserAns.question_id) \
+        .where(Questions.id == Ans.question_id) \
+        .where(Questions.id == questions.Questions.id)
+
+    ans = database.execute(query_ans).all()
+    database.commit()
 
     return {
-        "id": query_question.Questions.id,
-        'text': query_question.Questions.text,
-        'state': query_question.Questions.state,
-        'date': query_question.Questions.date
+        "id": questions.Questions.id,
+        'text': questions.Questions.text,
+        'state': questions.Questions.state,
+        'date': questions.Questions.date,
+        'ansList': ans
     }

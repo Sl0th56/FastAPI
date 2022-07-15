@@ -6,6 +6,7 @@ from sqlalchemy import func, select, or_, and_
 
 router = APIRouter()
 
+
 @router.post('/user')
 def create_user_ans(userID: int, questionId: int, ansPosition: int = None, database=Depends(connection_db)):
     exists_question = database.query(Ans).filter(Ans.question_id == questionId)\
@@ -39,6 +40,7 @@ def create_user_ans(userID: int, questionId: int, ansPosition: int = None, datab
         'ans_position': ansPosition
     }
 
+
 @router.get('/user')
 def get_current_unanswered_question(userID: int, database=Depends(connection_db)):
     exists_question = database.query(UserAns).filter(UserAns.user_id == userID).first()
@@ -57,7 +59,6 @@ def get_current_unanswered_question(userID: int, database=Depends(connection_db)
         return {None}
 
     query_ans = select(Ans.position, Ans.text) \
-        .where(and_(UserAns.user_id == userID, UserAns.ans_position == None)) \
         .where(and_(UserAns.user_id == userID, UserAns.ans_position == None)) \
         .where(Questions.id == UserAns.question_id) \
         .where(Questions.id == Ans.question_id) \
